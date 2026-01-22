@@ -3,17 +3,21 @@ import Web3 from 'web3';
 import { Layout, Button, Card, Input, Table, Tag, message, Typography, Row, Col } from 'antd';
 import { CarOutlined, WalletOutlined, UserAddOutlined, ReloadOutlined } from '@ant-design/icons';
 
+
 const { Header, Content } = Layout;
 const { Text } = Typography;
 
 // --- KONFIGURASI KONTRAK (WAJIB DIISI) ---
 // 1. Ganti dengan Address Kontrak Anda dari Remix
-const CONTRACT_ADDRESS = "0x.....(PASTE ADDRESS DI SINI).....";
+const CONTRACT_ADDRESS = "0x358AA13c52544ECCEF6B0ADD0f801012ADAD5eE3";
 
 // 2. Ganti dengan ABI Anda dari Remix (Paste Full JSON di sini)
 const CONTRACT_ABI = [
   // ... (PASTE ISI JSON ABI DI SINI) ...
 ];
+
+// TAMBAHAN 1: Paste URL Infura Anda di sini
+const INFURA_URL = "https://sepolia.infura.io/v3/6c1c4851a69949c0ae1c5a0f9f751f91";
 
 function App() {
   const [web3, setWeb3] = useState(null);
@@ -70,7 +74,46 @@ function App() {
     setLoading(false);
   };
 
-  useEffect(() => { if (contract) loadRides(); }, [contract]);
+  // --- MODIFIKASI: Load Data Awal Pakai Infura ---
+  useEffect(() => {
+    const initData = async () => {
+      // Skenario 1: Jika user sudah connect wallet (pakai MetaMask)
+      if (contract) {
+        loadRides();
+      }
+      // Skenario 2: Jika BELUM connect wallet (pakai Infura buat intip data)
+      else {
+        try {
+          // Bikin koneksi "mata-mata" (Read Only) lewat Infura
+          const web3Infura = new Web3(INFURA_URL);
+          const contractInfura = new web3Infura.eth.Contract(CONTRACT_ABI, CONTRACT_ADDRESS);
+
+          // Ambil data counter
+          const counter = await contractInfura.methods.rideCounter().call();
+          const loadedRides = [];
+
+          // Loop data satu per satu
+          for (let i = 1; i <= Number(counter); i++) {
+            const ride = await contractInfura.methods.rides(i).call();
+            loadedRides.push({
+              key: i,
+              id: ride.id.toString(),
+              pickup: ride.pickup,
+              dest: ride.dest,
+              price: ride.price.toString(),
+              status: Number(ride.status),
+            });
+          }
+          setRides(loadedRides); // Tampilkan di tabel
+          console.log("Data loaded via Infura (Read-Only Mode)");
+        } catch (err) {
+          console.log("Gagal load Infura:", err);
+        }
+      }
+    };
+
+    initData();
+  }, [contract]); // Jalan setiap kali status kontrak berubah
 
   // 3. FUNGSI TRANSAKSI
   const handleRegister = async () => {
